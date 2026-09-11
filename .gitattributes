@@ -1,0 +1,7 @@
+# Two files here have SHA-256 hashes published in the README, and the entire
+# point of those hashes is that anyone can recompute them on their own machine.
+# Git's autocrlf would rewrite line endings on a Windows checkout and break
+# verification without changing a single visible character. Pin every text file
+# to LF. The working tree is already LF everywhere, so this changes nothing
+# today — it stops a future checkout from silently invalidating the hashes.
+* text=auto eol=lf

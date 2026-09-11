@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+._*
+
+# Editors and stray backups
+*.swp
+*~
+
+# Maintainer notes, kept local. Agent instructions, not part of the published
+# tool — the page's own documentation is README.md.
+CLAUDE.md

@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No network. This CSP makes "offline" a property of the file, not a promise. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Dice Wallet Generator — BIP39 words from dice, last word recovered</title>
+<style>
+
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9; --panel: #ffffff; --fg: #12151a; --muted: #5b6472;
+    --line: #e2e5ea; --accent: #0b62d0; --good: #1a8a5a; --bad: #c02b2b; --warn: #8a5300;
+    --hi: #fff4cc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #171a21; --fg: #e8eaed; --muted: #9aa3b2;
+      --line: #2a2f3a; --accent: #5ea9ff; --good: #3ddc97; --bad: #ff6b6b; --warn: #ffb454;
+      --hi: #3a3320;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 4rem; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 56rem; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; }
+  .badge {
+    display: inline-block; padding: .15rem .5rem; border: 1px solid var(--line);
+    border-radius: 999px; font-size: .75rem; color: var(--good); vertical-align: 2px;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.1rem; margin-bottom: 1.25rem;
+  }
+  label { display: block; font-weight: 600; font-size: .85rem; margin-bottom: .4rem; }
+  .hint { font-weight: 400; color: var(--muted); }
+  textarea, input[type=text] {
+    width: 100%; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--bg); color: var(--fg); font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical;
+  }
+  textarea { min-height: 5.5rem; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .row { display: flex; gap: .75rem; align-items: flex-end; margin-top: .9rem; flex-wrap: wrap; }
+  .row > .grow { flex: 1 1 18rem; }
+  button {
+    padding: .55rem .9rem; border: 1px solid var(--line); border-radius: 7px; background: var(--panel);
+    color: var(--fg); font: inherit; font-size: .85rem; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  .status { margin: 1rem 0 0; font-size: .9rem; }
+  .status.ok  { color: var(--good); }
+  .status.bad { color: var(--bad); }
+  .status.warn{ color: var(--warn); }
+  .note {
+    border-left: 3px solid var(--warn); background: var(--bg); padding: .7rem .9rem;
+    border-radius: 0 7px 7px 0; font-size: .85rem; color: var(--muted); margin: 0 0 1.1rem;
+  }
+  .note strong { color: var(--fg); }
+  .cand {
+    display: flex; gap: .85rem; align-items: flex-start; padding: .65rem .75rem;
+    border: 1px solid var(--line); border-radius: 8px; margin-bottom: .5rem;
+  }
+  .cand .n { color: var(--muted); font-size: .78rem; min-width: 2.4rem; padding-top: .18rem;
+             font-variant-numeric: tabular-nums; }
+  .cand .body { flex: 1; min-width: 0; }
+  .cand .phrase {
+    font: 13.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+    word-break: break-word; user-select: all; cursor: text;
+  }
+  .cand .last { background: var(--hi); color: var(--fg); font-weight: 700;
+                padding: .05rem .3rem; border-radius: 4px; }
+  .cand .meta { color: var(--muted); font-size: .75rem; margin-top: .2rem;
+                font-variant-numeric: tabular-nums; }
+  .cand button { padding: .3rem .55rem; font-size: .75rem; }
+  details { margin-top: 1.5rem; }
+  summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+  table { border-collapse: collapse; margin-top: .75rem; font-size: .82rem; width: 100%; }
+  td, th { text-align: left; padding: .3rem .6rem; border-bottom: 1px solid var(--line); }
+  td:first-child { font-family: ui-monospace, Menlo, monospace; }
+  .pass { color: var(--good); } .fail { color: var(--bad); font-weight: 700; }
+  footer { margin-top: 2rem; color: var(--muted); font-size: .78rem; }
+  code { font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+  .err-list { margin: .5rem 0 0; padding-left: 1.1rem; font-size: .85rem; color: var(--bad); }
+
+
+/* combined additions */
+h2 { font-size: .95rem; margin: 0 0 .85rem; display: flex; align-items: center; gap: .5rem; }
+h2 .step { font-size: .7rem; font-weight: 700; color: var(--accent); border: 1px solid var(--line);
+           border-radius: 999px; padding: .12rem .5rem; font-variant-numeric: tabular-nums; }
+h2 .of { font-weight: 400; font-size: .78rem; color: var(--muted); }
+.wordrow { font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; padding: .65rem .75rem;
+           border: 1px solid var(--line); border-radius: 8px; margin-bottom: .5rem; background: var(--panel); }
+.wordrow .w { background: var(--hi); color: var(--fg); font-weight: 700; padding: .05rem .3rem; border-radius: 4px; }
+.wordrow .meta { color: var(--muted); font-size: .75rem; display: block; margin-top: .2rem; }
+.wordrow .err { color: var(--bad); font-size: .85rem; }
+.grid { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+.grid > .panel { flex: 1 1 22rem; }
+.cand.picked { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.pickmark { color: var(--accent); font-size: .74rem; font-weight: 700; margin-top: .25rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dice Wallet Generator <span class="badge">offline · no network</span></h1>
+  <p class="sub">
+    Both halves of the dice procedure in one file: roll dice into BIP39 words, then
+    recover every checksum-valid candidate for the final word. Phrase recovery works
+    on its own too — 11 / 14 / 17 / 20 / 23 words in, or a complete phrase to verify.
+  </p>
+
+  <div class="panel">
+    <h2><span class="step">1</span> Dice rolls → words <span class="of">six rolls per word</span></h2>
+    <label for="rolls">Dice rolls <span class="hint">— 6 per word: five 2-bit rolls (reroll 5 or 6), then one 1-bit roll</span></label>
+    <textarea id="rolls" spellcheck="false" autocomplete="off" autocapitalize="off"
+              placeholder="3 1 4 2 1 4 — six rolls per word"></textarea>
+    <div class="row">
+      <button id="copy-words" type="button">Copy all words</button>
+      <button id="to-phrase" type="button">Send to step 2 →</button>
+      <button id="dice-clear" type="button">Clear rolls</button>
+    </div>
+    <div id="rolls-status" class="status"></div>
+  </div>
+  <div id="rolls-out"></div>
+
+  <div class="panel">
+    <h2><span class="step">2</span> Words → candidate last words <span class="of">the result list is below</span></h2>
+    <label for="phrase">Your words <span class="hint">— separated by spaces or newlines</span></label>
+    <textarea id="phrase" spellcheck="false" autocomplete="off" autocapitalize="off"
+              placeholder="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon"></textarea>
+    <div class="row">
+      <div class="grow">
+        <label for="prefix">First letter(s) of the missing word <span class="hint">— optional</span></label>
+        <input type="text" id="prefix" spellcheck="false" autocomplete="off" autocapitalize="off"
+               placeholder="e.g. abo">
+      </div>
+      <button id="clear" type="button">Clear</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2><span class="step">3</span> The 24th word <span class="of">three rolls → which candidate</span></h2>
+      <label for="pick">Three dice rolls <span class="hint">— no rerolls</span></label>
+      <input type="text" id="pick" spellcheck="false" autocomplete="off" autocapitalize="off"
+             placeholder="e.g. 2 5 6">
+      <div id="pick-out"></div>
+    </div>
+    <div class="panel">
+      <h2>Cross-check <span class="of">11 bits or an index → word</span></h2>
+      <label for="bits">Bits → word</label>
+      <input type="text" id="bits" spellcheck="false" autocomplete="off" autocapitalize="off"
+             placeholder="e.g. 10001101001">
+      <div id="bits-out"></div>
+    </div>
+  </div>
+
+  <div id="output"></div>
+
+  <details id="selftest">
+    <summary>Self-test</summary>
+    <div id="selftest-body"></div>
+  </details>
+
+  <footer>
+    <p>
+      One self-contained file, no build step and no dependencies: the dice-roll tools
+      and the last-word recovery search share a single BIP39 wordlist, so the two
+      halves cannot disagree. BIP39 English wordlist, 2048 words. Embedded wordlist
+      SHA-256:<br>
+      <code>187db04a869dd9bc7be80d21a86497d692c0db6abd3aa8cb6be5d618ff757fae</code>
+      <span class="hint">(words joined by <code>\n</code>, no trailing newline)</span>
+      The words are the published BIP-39 English list; <code>bip39-english.txt</code> in the
+      project folder is that list as a file (<code>2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda</code>,
+      2048 lines) to compare against. This page reads nothing but itself.
+    </p>
+    <p>
+      This page makes no network requests and writes nothing to disk, cookies, or
+      <code>localStorage</code>. Nothing is stored when you close it.
+    </p>
+  </footer>
+</main>
+
+<script>
+'use strict';
+
+const SHA256_K = new Uint32Array([
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+]);
+
+function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+
+function sha256(bytes) {
+  const len = bytes.length;
+  const total = Math.ceil((len + 9) / 64) * 64;   // +0x80, +8-byte length, to a 64-byte block
+  const buf = new Uint8Array(total);
+  buf.set(bytes);
+  buf[len] = 0x80;
+  const view = new DataView(buf.buffer);
+  const bits = len * 8;
+  view.setUint32(total - 8, Math.floor(bits / 4294967296), false);
+  view.setUint32(total - 4, bits >>> 0, false);
+
+  const H = new Uint32Array([
+    0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19
+  ]);
+  const w = new Uint32Array(64);
+
+  for (let off = 0; off < total; off += 64) {
+    for (let t = 0; t < 16; t++) w[t] = view.getUint32(off + t * 4, false);
+    for (let t = 16; t < 64; t++) {
+      const x = w[t - 15], y = w[t - 2];
+      const s0 = rotr(x, 7) ^ rotr(x, 18) ^ (x >>> 3);
+      const s1 = rotr(y, 17) ^ rotr(y, 19) ^ (y >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+    }
+    let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+    for (let t = 0; t < 64; t++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + SHA256_K[t] + w[t]) | 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0;
+      d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+
+  const out = new Uint8Array(32);
+  const ov = new DataView(out.buffer);
+  for (let i = 0; i < 8; i++) ov.setUint32(i * 4, H[i] >>> 0, false);
+  return out;
+}
+
+const enc = new TextEncoder();
+function utf8(s) { return enc.encode(s); }
+function hex(u8) { return Array.from(u8, b => b.toString(16).padStart(2, '0')).join(''); }
+
+/* ------------------------------------------------------------------ *
+ * BIP39 — core
+ *
+ * A mnemonic is entropy || checksum, cut into 11-bit groups that index
+ * the 2048-word list. Checksum length is ENT/32 bits:
+ *
+ *   12 words = 128 + 4 bits     15 = 160 + 5     18 = 192 + 6
+ *   21 words = 224 + 7 bits     24 = 256 + 8
+ *
+ * The last word carries the tail of the entropy AND the whole checksum,
+ * so for N words known there are 2^(ENT - 11N) candidate last words —
+ * and every one of them is a checksum-valid mnemonic. They are not
+ * "maybe valid": each is a real, self-consistent seed for a different
+ * wallet. That is why the count matters and why the prefix filter exists.
+ * ------------------------------------------------------------------ */
+const WORDLIST = ["abandon","ability","able","about","above","absent","absorb","abstract","absurd","abuse","access","accident","account","accuse","achieve","acid","acoustic","acquire","across","act","action","actor","actress","actual","adapt","add","addict","address","adjust","admit","adult","advance","advice","aerobic","affair","afford","afraid","again","age","agent","agree","ahead","aim","air","airport","aisle","alarm","album","alcohol","alert","alien","all","alley","allow","almost","alone","alpha","already","also","alter","always","amateur","amazing","among","amount","amused","analyst","anchor","ancient","anger","angle","angry","animal","ankle","announce","annual","another","answer","antenna","antique","anxiety","any","apart","apology","appear","apple","approve","april","arch","arctic","area","arena","argue","arm","armed","armor","army","around","arrange","arrest","arrive","arrow","art","artefact","artist","artwork","ask","aspect","assault","asset","assist","assume","asthma","athlete","atom","attack","attend","attitude","attract","auction","audit","august","aunt","author","auto","autumn","average","avocado","avoid","awake","aware","away","awesome","awful","awkward","axis","baby","bachelor","bacon","badge","bag","balance","balcony","ball","bamboo","banana","banner","bar","barely","bargain","barrel","base","basic","basket","battle","beach","bean","beauty","because","become","beef","before","begin","behave","behind","believe","below","belt","bench","benefit","best","betray","better","between","beyond","bicycle","bid","bike","bind","biology","bird","birth","bitter","black","blade","blame","blanket","blast","bleak","bless","blind","blood","blossom","blouse","blue","blur","blush","board","boat","body","boil","bomb","bone","bonus","book","boost","border","boring","borrow","boss","bottom","bounce","box","boy","bracket","brain","brand","brass","brave","bread","breeze","brick","bridge","brief","bright","bring","brisk","broccoli","broken","bronze","broom","brother","brown","brush","bubble","buddy","budget","buffalo","build","bulb","bulk","bullet","bundle","bunker","burden","burger","burst","bus","business","busy","butter","buyer","buzz","cabbage","cabin","cable","cactus","cage","cake","call","calm","camera","camp","can","canal","cancel","candy","cannon","canoe","canvas","canyon","capable","capital","captain","car","carbon","card","cargo","carpet","carry","cart","case","cash","casino","castle","casual","cat","catalog","catch","category","cattle","caught","cause","caution","cave","ceiling","celery","cement","census","century","cereal","certain","chair","chalk","champion","change","chaos","chapter","charge","chase","chat","cheap","check","cheese","chef","cherry","chest","chicken","chief","child","chimney","choice","choose","chronic","chuckle","chunk","churn","cigar","cinnamon","circle","citizen","city","civil","claim","clap","clarify","claw","clay","clean","clerk","clever","click","client","cliff","climb","clinic","clip","clock","clog","close","cloth","cloud","clown","club","clump","cluster","clutch","coach","coast","coconut","code","coffee","coil","coin","collect","color","column","combine","come","comfort","comic","common","company","concert","conduct","confirm","congress","connect","consider","control","convince","cook","cool","copper","copy","coral","core","corn","correct","cost","cotton","couch","country","couple","course","cousin","cover","coyote","crack","cradle","craft","cram","crane","crash","crater","crawl","crazy","cream","credit","creek","crew","cricket","crime","crisp","critic","crop","cross","crouch","crowd","crucial","cruel","cruise","crumble","crunch","crush","cry","crystal","cube","culture","cup","cupboard","curious","current","curtain","curve","cushion","custom","cute","cycle","dad","damage","damp","dance","danger","daring","dash","daughter","dawn","day","deal","debate","debris","decade","december","decide","decline","decorate","decrease","deer","defense","define","defy","degree","delay","deliver","demand","demise","denial","dentist","deny","depart","depend","deposit","depth","deputy","derive","describe","desert","design","desk","despair","destroy","detail","detect","develop","device","devote","diagram","dial","diamond","diary","dice","diesel","diet","differ","digital","dignity","dilemma","dinner","dinosaur","direct","dirt","disagree","discover","disease","dish","dismiss","disorder","display","distance","divert","divide","divorce","dizzy","doctor","document","dog","doll","dolphin","domain","donate","donkey","donor","door","dose","double","dove","draft","dragon","drama","drastic","draw","dream","dress","drift","drill","drink","drip","drive","drop","drum","dry","duck","dumb","dune","during","dust","dutch","duty","dwarf","dynamic","eager","eagle","early","earn","earth","easily","east","easy","echo","ecology","economy","edge","edit","educate","effort","egg","eight","either","elbow","elder","electric","elegant","element","elephant","elevator","elite","else","embark","embody","embrace","emerge","emotion","employ","empower","empty","enable","enact","end","endless","endorse","enemy","energy","enforce","engage","engine","enhance","enjoy","enlist","enough","enrich","enroll","ensure","enter","entire","entry","envelope","episode","equal","equip","era","erase","erode","erosion","error","erupt","escape","essay","essence","estate","eternal","ethics","evidence","evil","evoke","evolve","exact","example","excess","exchange","excite","exclude","excuse","execute","exercise","exhaust","exhibit","exile","exist","exit","exotic","expand","expect","expire","explain","expose","express","extend","extra","eye","eyebrow","fabric","face","faculty","fade","faint","faith","fall","false","fame","family","famous","fan","fancy","fantasy","farm","fashion","fat","fatal","father","fatigue","fault","favorite","feature","february","federal","fee","feed","feel","female","fence","festival","fetch","fever","few","fiber","fiction","field","figure","file","film","filter","final","find","fine","finger","finish","fire","firm","first","fiscal","fish","fit","fitness","fix","flag","flame","flash","flat","flavor","flee","flight","flip","float","flock","floor","flower","fluid","flush","fly","foam","focus","fog","foil","fold","follow","food","foot","force","forest","forget","fork","fortune","forum","forward","fossil","foster","found","fox","fragile","frame","frequent","fresh","friend","fringe","frog","front","frost","frown","frozen","fruit","fuel","fun","funny","furnace","fury","future","gadget","gain","galaxy","gallery","game","gap","garage","garbage","garden","garlic","garment","gas","gasp","gate","gather","gauge","gaze","general","genius","genre","gentle","genuine","gesture","ghost","giant","gift","giggle","ginger","giraffe","girl","give","glad","glance","glare","glass","glide","glimpse","globe","gloom","glory","glove","glow","glue","goat","goddess","gold","good","goose","gorilla","gospel","gossip","govern","gown","grab","grace","grain","grant","grape","grass","gravity","great","green","grid","grief","grit","grocery","group","grow","grunt","guard","guess","guide","guilt","guitar","gun","gym","habit","hair","half","hammer","hamster","hand","happy","harbor","hard","harsh","harvest","hat","have","hawk","hazard","head","health","heart","heavy","hedgehog","height","hello","helmet","help","hen","hero","hidden","high","hill","hint","hip","hire","history","hobby","hockey","hold","hole","holiday","hollow","home","honey","hood","hope","horn","horror","horse","hospital","host","hotel","hour","hover","hub","huge","human","humble","humor","hundred","hungry","hunt","hurdle","hurry","hurt","husband","hybrid","ice","icon","idea","identify","idle","ignore","ill","illegal","illness","image","imitate","immense","immune","impact","impose","improve","impulse","inch","include","income","increase","index","indicate","indoor","industry","infant","inflict","inform","inhale","inherit","initial","inject","injury","inmate","inner","innocent","input","inquiry","insane","insect","inside","inspire","install","intact","interest","into","invest","invite","involve","iron","island","isolate","issue","item","ivory","jacket","jaguar","jar","jazz","jealous","jeans","jelly","jewel","job","join","joke","journey","joy","judge","juice","jump","jungle","junior","junk","just","kangaroo","keen","keep","ketchup","key","kick","kid","kidney","kind","kingdom","kiss","kit","kitchen","kite","kitten","kiwi","knee","knife","knock","know","lab","label","labor","ladder","lady","lake","lamp","language","laptop","large","later","latin","laugh","laundry","lava","law","lawn","lawsuit","layer","lazy","leader","leaf","learn","leave","lecture","left","leg","legal","legend","leisure","lemon","lend","length","lens","leopard","lesson","letter","level","liar","liberty","library","license","life","lift","light","like","limb","limit","link","lion","liquid","list","little","live","lizard","load","loan","lobster","local","lock","logic","lonely","long","loop","lottery","loud","lounge","love","loyal","lucky","luggage","lumber","lunar","lunch","luxury","lyrics","machine","mad","magic","magnet","maid","mail","main","major","make","mammal","man","manage","mandate","mango","mansion","manual","maple","marble","march","margin","marine","market","marriage","mask","mass","master","match","material","math","matrix","matter","maximum","maze","meadow","mean","measure","meat","mechanic","medal","media","melody","melt","member","memory","mention","menu","mercy","merge","merit","merry","mesh","message","metal","method","middle","midnight","milk","million","mimic","mind","minimum","minor","minute","miracle","mirror","misery","miss","mistake","mix","mixed","mixture","mobile","model","modify","mom","moment","monitor","monkey","monster","month","moon","moral","more","morning","mosquito","mother","motion","motor","mountain","mouse","move","movie","much","muffin","mule","multiply","muscle","museum","mushroom","music","must","mutual","myself","mystery","myth","naive","name","napkin","narrow","nasty","nation","nature","near","neck","need","negative","neglect","neither","nephew","nerve","nest","net","network","neutral","never","news","next","nice","night","noble","noise","nominee","noodle","normal","north","nose","notable","note","nothing","notice","novel","now","nuclear","number","nurse","nut","oak","obey","object","oblige","obscure","observe","obtain","obvious","occur","ocean","october","odor","off","offer","office","often","oil","okay","old","olive","olympic","omit","once","one","onion","online","only","open","opera","opinion","oppose","option","orange","orbit","orchard","order","ordinary","organ","orient","original","orphan","ostrich","other","outdoor","outer","output","outside","oval","oven","over","own","owner","oxygen","oyster","ozone","pact","paddle","page","pair","palace","palm","panda","panel","panic","panther","paper","parade","parent","park","parrot","party","pass","patch","path","patient","patrol","pattern","pause","pave","payment","peace","peanut","pear","peasant","pelican","pen","penalty","pencil","people","pepper","perfect","permit","person","pet","phone","photo","phrase","physical","piano","picnic","picture","piece","pig","pigeon","pill","pilot","pink","pioneer","pipe","pistol","pitch","pizza","place","planet","plastic","plate","play","please","pledge","pluck","plug","plunge","poem","poet","point","polar","pole","police","pond","pony","pool","popular","portion","position","possible","post","potato","pottery","poverty","powder","power","practice","praise","predict","prefer","prepare","present","pretty","prevent","price","pride","primary","print","priority","prison","private","prize","problem","process","produce","profit","program","project","promote","proof","property","prosper","protect","proud","provide","public","pudding","pull","pulp","pulse","pumpkin","punch","pupil","puppy","purchase","purity","purpose","purse","push","put","puzzle","pyramid","quality","quantum","quarter","question","quick","quit","quiz","quote","rabbit","raccoon","race","rack","radar","radio","rail","rain","raise","rally","ramp","ranch","random","range","rapid","rare","rate","rather","raven","raw","razor","ready","real","reason","rebel","rebuild","recall","receive","recipe","record","recycle","reduce","reflect","reform","refuse","region","regret","regular","reject","relax","release","relief","rely","remain","remember","remind","remove","render","renew","rent","reopen","repair","repeat","replace","report","require","rescue","resemble","resist","resource","response","result","retire","retreat","return","reunion","reveal","review","reward","rhythm","rib","ribbon","rice","rich","ride","ridge","rifle","right","rigid","ring","riot","ripple","risk","ritual","rival","river","road","roast","robot","robust","rocket","romance","roof","rookie","room","rose","rotate","rough","round","route","royal","rubber","rude","rug","rule","run","runway","rural","sad","saddle","sadness","safe","sail","salad","salmon","salon","salt","salute","same","sample","sand","satisfy","satoshi","sauce","sausage","save","say","scale","scan","scare","scatter","scene","scheme","school","science","scissors","scorpion","scout","scrap","screen","script","scrub","sea","search","season","seat","second","secret","section","security","seed","seek","segment","select","sell","seminar","senior","sense","sentence","series","service","session","settle","setup","seven","shadow","shaft","shallow","share","shed","shell","sheriff","shield","shift","shine","ship","shiver","shock","shoe","shoot","shop","short","shoulder","shove","shrimp","shrug","shuffle","shy","sibling","sick","side","siege","sight","sign","silent","silk","silly","silver","similar","simple","since","sing","siren","sister","situate","six","size","skate","sketch","ski","skill","skin","skirt","skull","slab","slam","sleep","slender","slice","slide","slight","slim","slogan","slot","slow","slush","small","smart","smile","smoke","smooth","snack","snake","snap","sniff","snow","soap","soccer","social","sock","soda","soft","solar","soldier","solid","solution","solve","someone","song","soon","sorry","sort","soul","sound","soup","source","south","space","spare","spatial","spawn","speak","special","speed","spell","spend","sphere","spice","spider","spike","spin","spirit","split","spoil","sponsor","spoon","sport","spot","spray","spread","spring","spy","square","squeeze","squirrel","stable","stadium","staff","stage","stairs","stamp","stand","start","state","stay","steak","steel","stem","step","stereo","stick","still","sting","stock","stomach","stone","stool","story","stove","strategy","street","strike","strong","struggle","student","stuff","stumble","style","subject","submit","subway","success","such","sudden","suffer","sugar","suggest","suit","summer","sun","sunny","sunset","super","supply","supreme","sure","surface","surge","surprise","surround","survey","suspect","sustain","swallow","swamp","swap","swarm","swear","sweet","swift","swim","swing","switch","sword","symbol","symptom","syrup","system","table","tackle","tag","tail","talent","talk","tank","tape","target","task","taste","tattoo","taxi","teach","team","tell","ten","tenant","tennis","tent","term","test","text","thank","that","theme","then","theory","there","they","thing","this","thought","three","thrive","throw","thumb","thunder","ticket","tide","tiger","tilt","timber","time","tiny","tip","tired","tissue","title","toast","tobacco","today","toddler","toe","together","toilet","token","tomato","tomorrow","tone","tongue","tonight","tool","tooth","top","topic","topple","torch","tornado","tortoise","toss","total","tourist","toward","tower","town","toy","track","trade","traffic","tragic","train","transfer","trap","trash","travel","tray","treat","tree","trend","trial","tribe","trick","trigger","trim","trip","trophy","trouble","truck","true","truly","trumpet","trust","truth","try","tube","tuition","tumble","tuna","tunnel","turkey","turn","turtle","twelve","twenty","twice","twin","twist","two","type","typical","ugly","umbrella","unable","unaware","uncle","uncover","under","undo","unfair","unfold","unhappy","uniform","unique","unit","universe","unknown","unlock","until","unusual","unveil","update","upgrade","uphold","upon","upper","upset","urban","urge","usage","use","used","useful","useless","usual","utility","vacant","vacuum","vague","valid","valley","valve","van","vanish","vapor","various","vast","vault","vehicle","velvet","vendor","venture","venue","verb","verify","version","very","vessel","veteran","viable","vibrant","vicious","victory","video","view","village","vintage","violin","virtual","virus","visa","visit","visual","vital","vivid","vocal","voice","void","volcano","volume","vote","voyage","wage","wagon","wait","walk","wall","walnut","want","warfare","warm","warrior","wash","wasp","waste","water","wave","way","wealth","weapon","wear","weasel","weather","web","wedding","weekend","weird","welcome","west","wet","whale","what","wheat","wheel","when","where","whip","whisper","wide","width","wife","wild","will","win","window","wine","wing","wink","winner","winter","wire","wisdom","wise","wish","witness","wolf","woman","wonder","wood","wool","word","work","world","worry","worth","wrap","wreck","wrestle","wrist","write","wrong","yard","year","yellow","you","young","youth","zebra","zero","zone","zoo"];
+const INDEX = new Map(WORDLIST.map((w, i) => [w, i]));
+const VALID_LENGTHS = [12, 15, 18, 21, 24];
+
+const WORD_RE = /^[a-z]+$/;
+
+/** Split raw input into candidate words. */
+function normalize(text) {
+  return text.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Map words to indices. Accepts a word outright; otherwise, if the input
+ * is an unambiguous prefix (BIP39 guarantees 4 letters suffice), accepts
+ * that and reports the expansion. Anything else is reported as unknown.
+ */
+function resolve(words) {
+  const indices = [];
+  const corrections = [];
+  const unknown = [];
+  for (const w of words) {
+    if (INDEX.has(w)) { indices.push(INDEX.get(w)); continue; }
+    const matches = WORD_RE.test(w) ? WORDLIST.filter(x => x.startsWith(w)) : [];
+    if (matches.length === 1) {
+      corrections.push({ from: w, to: matches[0] });
+      indices.push(INDEX.get(matches[0]));
+    } else {
+      unknown.push({ word: w, count: matches.length, matches: matches.slice(0, 6) });
+    }
+  }
+  return { indices, corrections, unknown };
+}
+
+function bitsFromIndices(indices) {
+  const bits = [];
+  for (const idx of indices) for (let b = 10; b >= 0; b--) bits.push((idx >> b) & 1);
+  return bits;
+}
+
+function bytesFromBits(bits) {
+  const out = new Uint8Array(bits.length >> 3);
+  for (let i = 0; i < out.length; i++) {
+    let v = 0;
+    for (let b = 0; b < 8; b++) v = (v << 1) | bits[i * 8 + b];
+    out[i] = v;
+  }
+  return out;
+}
+
+function bitsToInt(bits) { return bits.reduce((a, b) => (a << 1) | b, 0); }
+
+/** First k bits of a byte string, as an integer. */
+function topBits(bytes, k) {
+  let v = 0;
+  for (let b = 0; b < k; b++) v = (v << 1) | ((bytes[b >> 3] >> (7 - (b & 7))) & 1);
+  return v;
+}
+
+/** Entropy for a mnemonic of L words, as a bit array. */
+function entropyBits(indices, L) {
+  const total = L * 11;
+  const ent = total * 32 / 33;
+  return bitsFromIndices(indices).slice(0, ent);
+}
+
+function compute(words, prefix) {
+  const n = words.length;
+  let L, mode;
+  if (VALID_LENGTHS.includes(n)) { L = n; mode = 'verify'; }
+  else if (VALID_LENGTHS.includes(n + 1)) { L = n + 1; mode = 'complete'; }
+  else {
+    return {
+      error: `${n} word${n === 1 ? '' : 's'} is neither a complete BIP39 phrase nor one `
+           + `missing its final word. Full lengths are 12, 15, 18, 21, 24; the last-word `
+           + `cases are 11, 14, 17, 20, 23.`
+    };
+  }
+
+  const totalBits = L * 11;
+  const entBits = totalBits * 32 / 33;
+  const csBits = totalBits - entBits;
+  const indices = resolve(words).indices;
+
+  if (mode === 'verify') {
+    const bits = bitsFromIndices(indices);
+    const expected = topBits(sha256(bytesFromBits(bits.slice(0, entBits))), csBits);
+    const actual = bitsToInt(bits.slice(entBits));
+    return { mode, L, entBits, csBits, valid: expected === actual, expected, actual };
+  }
+
+  const known = bitsFromIndices(indices);
+  const free = entBits - known.length;
+  const all = [];
+  for (let v = 0; v < (1 << free); v++) {
+    const ent = known.slice();
+    for (let b = free - 1; b >= 0; b--) ent.push((v >> b) & 1);
+    const cs = topBits(sha256(bytesFromBits(ent)), csBits);
+    const lastIdx = (v << csBits) | cs;
+    all.push({ entropyTail: v, checksum: cs, lastIdx, word: WORDLIST[lastIdx] });
+  }
+  const candidates = prefix ? all.filter(c => c.word.startsWith(prefix)) : all;
+  return { mode, L, entBits, csBits, free, total: all.length, candidates };
+}
+
+/* ------------------------------------------------------------------ *
+ * UI
+ * ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+const elPhrase = $('phrase'), elPrefix = $('prefix'), elStatus = $('status'), elOut = $('output');
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function copy(text, btn) {
+  const done = () => { const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = t, 1200); };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Press ⌘C'; }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, fallback);
+  } else fallback();
+}
+
+function setStatus(text, cls) {
+  elStatus.textContent = text;
+  elStatus.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function render() {
+  const words = normalize(elPhrase.value);
+  const prefix = elPrefix.value.trim().toLowerCase();
+
+  elOut.replaceChildren();
+  if (words.length === 0) { setStatus(''); return; }
+
+  const r = resolve(words);
+  if (r.unknown.length) {
+    setStatus(`${r.unknown.length} word${r.unknown.length === 1 ? '' : 's'} not in the BIP39 English list.`, 'bad');
+    const ul = document.createElement('ul');
+    ul.className = 'err-list';
+    for (const u of r.unknown) {
+      const li = document.createElement('li');
+      li.textContent = u.count === 0
+        ? `"${u.word}" — no wordlist entry starts with this`
+        : `"${u.word}" — ambiguous, matches ${u.count}: ${u.matches.join(', ')}${u.count > u.matches.length ? ', …' : ''}`;
+      ul.appendChild(li);
+    }
+    elOut.appendChild(ul);
+    return;
+  }
+  if (r.corrections.length) {
+    setStatus('Read as: ' + r.corrections.map(c => `${c.from} → ${c.to}`).join(', '), 'warn');
+  }
+
+  const res = compute(words, prefix);
+  if (res.error) { setStatus(res.error, 'bad'); return; }
+
+  if (res.mode === 'verify') {
+    const ok = res.valid;
+    setStatus(
+      ok ? `Valid — ${res.L}-word mnemonic, checksum matches.`
+         : `Checksum does NOT match — expected ${res.expected}, found ${res.actual}. One or more words is wrong or out of order.`,
+      ok ? 'ok' : 'bad'
+    );
+    return;
+  }
+
+  const shown = res.candidates.length;
+  setStatus(
+    `${res.L - 1} words in → ${res.L}-word mnemonic. `
+    + `${res.total} candidate${res.total === 1 ? '' : 's'} from ${res.free} unknown entropy bit${res.free === 1 ? '' : 's'}`
+    + (prefix ? `, ${shown} matching "${prefix}".` : '.'),
+    shown === 0 ? 'bad' : ''
+  );
+
+  if (shown === 0) {
+    const p = document.createElement('p');
+    p.className = 'status bad';
+    p.textContent = `No valid candidate starts with "${prefix}". The missing word is not that.`;
+    elOut.appendChild(p);
+    return;
+  }
+
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.innerHTML = res.total === shown
+    ? `<strong>Every candidate below is checksum-valid.</strong> Each is a real mnemonic for a `
+      + `different wallet — the checksum cannot tell you which is yours. Verify against a known `
+      + `address or a known word.`
+    : `<strong>Filtered by "${esc(prefix)}".</strong> All ${res.total} candidates were checksum-valid; `
+      + `only those matching the prefix are shown.`;
+  elOut.appendChild(note);
+
+  const frag = document.createDocumentFragment();
+  res.candidates.forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'cand';
+
+    const n = document.createElement('div');
+    n.className = 'n';
+    n.textContent = String(i + 1);
+
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    const phrase = document.createElement('div');
+    phrase.className = 'phrase';
+    phrase.append(res.mode === 'complete' ? words.join(' ') + ' ' : '');
+    const last = document.createElement('span');
+    last.className = 'last';
+    last.textContent = c.word;
+    phrase.appendChild(last);
+    phrase.title = 'Click to select all';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = `word #${c.lastIdx} · entropy tail ${c.entropyTail} · checksum ${c.checksum}`;
+
+    body.append(phrase, meta);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', () => copy(phrase.textContent, btn));
+
+    row.append(n, body, btn);
+    frag.appendChild(row);
+  });
+  elOut.appendChild(frag);
+}
+
+const PAIR = { '1': '00', '2': '01', '3': '10', '4': '11' };   // 5, 6 → reroll
+const singleBit = r => (r <= 3 ? '0' : '1');                   // last roll: 1–3 → 0, 4–6 → 1
+
+function parseRolls(text) {
+  const badChars = (text.match(/[^0-9\s,;]+/g) || []).length;
+  const digits = (text.match(/\d/g) || []).map(Number);
+  const badDigits = digits.filter(d => d < 1 || d > 6);
+  return { rolls: digits.filter(d => d >= 1 && d <= 6), badChars, badDigits };
+}
+
+function wordsFromRolls(rolls) {
+  const out = [];
+  for (let w = 0; w * 6 < rolls.length; w++) {
+    const group = rolls.slice(w * 6, w * 6 + 6);
+    const bits = [], errs = [];
+    for (let p = 0; p < group.length; p++) {
+      const r = group[p];
+      if (p === 5) bits.push(singleBit(r));
+      else if (r <= 4) bits.push(...PAIR[r]);
+      else errs.push('roll ' + (w * 6 + p + 1) + ' is a ' + r + ' — reroll it');
+    }
+    const idx = bits.length === 11 ? bits.reduce((a, b) => (a << 1) | (b === '1' ? 1 : 0), 0) : null;
+    out.push({ n: w + 1, rolls: group, bits: bits.join(''), errs, idx, word: idx === null ? null : WORDLIST[idx] });
+  }
+  return out;
+}
+
+function renderRolls() {
+  elRollsOut.replaceChildren();
+  const text = elRolls.value;
+  if (!text.trim()) { elRollsStatus.textContent = ''; elRollsStatus.className = 'status'; return; }
+  const { rolls, badChars, badDigits } = parseRolls(text);
+  // .length, not the array itself: badDigits comes from filter(), and [] is
+  // truthy — testing it directly rejected every input, valid rolls included.
+  if (badChars || badDigits.length) {
+    const parts = [];
+    if (badChars) parts.push(badChars + ' character(s) that are not digits');
+    if (badDigits.length) parts.push(badDigits.length + ' digit(s) outside 1–6');
+    elRollsStatus.textContent = parts.join(' and ') + ' — a bad roll shifts every word after it, so fix the rolls and retype.';
+    elRollsStatus.className = 'status bad';
+    return;
+  }
+  const words = wordsFromRolls(rolls);
+  const done = words.filter(w => w.idx !== null).length;
+  const last = words[words.length - 1];
+  let msg = rolls.length + ' rolls typed → ' + done + ' word' + (done === 1 ? '' : 's');
+  if (last && last.rolls.length < 6) msg += ' — last word needs ' + (6 - last.rolls.length) + ' more roll(s)';
+  elRollsStatus.textContent = msg;
+  elRollsStatus.className = 'status';
+  for (const w of words) {
+    const row = document.createElement('div');
+    row.className = 'wordrow';
+    if (w.idx !== null) {
+      const word = document.createElement('span');
+      word.className = 'w';
+      word.textContent = w.word;
+      const meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = 'word #' + w.idx + ' · bits ' + w.bits + ' · rolls ' + w.rolls.join(' ');
+      row.append('Word ' + w.n + '  ', word, meta);
+    } else {
+      row.append('Word ' + w.n + ': ' + w.rolls.join(' ') + (w.rolls.length < 6 ? ' …' : ''));
+      if (w.errs.length) {
+        const e = document.createElement('span');
+        e.className = 'err';
+        e.textContent = '  — ' + w.errs.join('; ');
+        row.appendChild(e);
+      }
+    }
+    elRollsOut.appendChild(row);
+  }
+}
+
+/* ---- bits → word (cross-check against the "word #N" on each roll row) ---- */
+function renderBits() {
+  elBitsOut.replaceChildren();
+  const raw = elBits.value.replace(/\s+/g, '');
+  if (!raw) return;
+  let idx = null, bits = null, note = null;
+  if (/^[01]{11}$/.test(raw)) { bits = raw; idx = parseInt(raw, 2); }
+  else if (/^[01]+$/.test(raw)) note = raw.length + ' bits — type exactly 11.';
+  else if (/^\d+$/.test(raw) && Number(raw) <= 2047) { idx = Number(raw); bits = idx.toString(2).padStart(11, '0'); }
+  else note = /^\d+$/.test(raw) ? 'index out of range (0–2047).' : 'type 11 bits or an index from 0 to 2047.';
+  const p = document.createElement('p');
+  if (idx !== null) {
+    p.className = 'wordrow';
+    p.textContent = WORDLIST[idx] + '  —  word #' + idx + ' — bits ' + bits;
+  } else {
+    p.className = 'status bad';
+    p.textContent = note;
+  }
+  elBitsOut.appendChild(p);
+}
+
+
+/* ================================================================== *
+ * The join — how the two halves above are wired together.
+ *
+ * Above this point: SHA-256, the wordlist, the BIP39 core with its recovery
+ * search, then the dice arithmetic (roll → bits → word, and the 24th-word
+ * pick). What follows is the wiring: one wordlist shared by both, one copy()
+ * helper, a button that carries the words from step 1 into step 2, and a ◆
+ * mark on the candidate the 24th-word rolls chose. The arithmetic of both
+ * halves is untouched.
+ * ==================================================================== */
+const LIST_HASH = '187db04a869dd9bc7be80d21a86497d692c0db6abd3aa8cb6be5d618ff757fae';
+
+const elRolls = $('rolls'), elBits = $('bits'), elPick = $('pick');
+const elRollsOut = $('rolls-out'), elBitsOut = $('bits-out'), elPickOut = $('pick-out');
+const elRollsStatus = $('rolls-status');
+
+/* ---- 24th word: three rolls choose one of the 8 candidates -------------
+ * (a-1)*36 + (b-1)*6 + (c-1) lands in 0…215, and 216 = 8 × 27 exactly, so
+ * every candidate is equally likely and no reroll is needed. Only the
+ * 23-word case has 8 candidates — the length this step belongs to.
+ * ---------------------------------------------------------------------- */
+function pickIndex(a, b, c) { return ((a - 1) * 36 + (b - 1) * 6 + (c - 1)) % 8; }
+
+/** The three rolls in the 24th-word box, or null if they are not three rolls. */
+function pickRolls() {
+  const m = elPick.value.match(/^\s*([1-6])\s*([1-6])\s*([1-6])\s*$/);
+  return m ? [+m[1], +m[2], +m[3]] : null;
+}
+
+/** The candidate rows currently on screen, in the order they are numbered. */
+function candidateRows() {
+  const rows = [];
+  for (const child of elOut.children) {
+    if (child && child.classList && child.classList.contains('cand')) rows.push(child);
+  }
+  return rows;
+}
+
+/** Take the ◆ badges out of a row's subtree — they hang off the row's body. */
+function stripBadges(el) {
+  for (const kid of Array.prototype.slice.call(el.children || [])) {
+    if (!kid || typeof kid === 'string') continue;               // text nodes
+    if (/\bpickmark\b/.test(kid.className || '')) { if (el.removeChild) el.removeChild(kid); continue; }
+    if (kid.children) stripBadges(kid);
+  }
+}
+
+/** Take the mark off every row. A mark belongs to the rolls in the box now —
+ *  change them and the old choice must not keep its ◆. */
+function clearMarks() {
+  for (const row of candidateRows()) {
+    if (row.classList && row.classList.remove) row.classList.remove('picked');
+    stripBadges(row);
+  }
+}
+
+/** Mark the row the dice chose — the list is numbered, so it can be read off. */
+function markPicked() {
+  clearMarks();                 // before marking: one pick, one mark — never two
+  const rolls = pickRolls();
+  const rows = candidateRows();
+  if (!rolls || rows.length !== 8) return;
+  const i = pickIndex(rolls[0], rolls[1], rolls[2]);
+  const row = rows[i];
+  if (!row || !row.classList) return;
+  row.classList.add('picked');
+  const body = row.children && row.children[1];
+  if (!body || !body.appendChild) return;
+  const badge = document.createElement('div');
+  badge.className = 'pickmark';
+  badge.textContent = '◆ dice chose candidate #' + (i + 1);
+  body.appendChild(badge);
+}
+
+function renderPick() {
+  elPickOut.replaceChildren();
+  if (!elPick.value.trim()) return;
+  const p = document.createElement('p');
+  const rolls = pickRolls();
+  if (!rolls) {
+    p.className = 'status bad';
+    p.textContent = 'type three rolls, e.g. 2 5 6';
+    elPickOut.appendChild(p);
+    return;
+  }
+  const v = (rolls[0] - 1) * 36 + (rolls[1] - 1) * 6 + (rolls[2] - 1);
+  const rem = pickIndex(rolls[0], rolls[1], rolls[2]);
+  const rows = candidateRows().length;
+  p.className = 'wordrow';
+  p.textContent = 'Rolls ' + rolls.join(' ') + ' → ' + v + ' → remainder ' + rem
+    + '  —  take candidate #' + (rem + 1) + ' (the “entropy tail ' + rem + '” row).';
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  meta.textContent = rows === 8
+    ? 'marked ◆ in the candidate list above'
+    : rows
+      ? 'step 2 now lists ' + rows + ' candidate' + (rows === 1 ? '' : 's')
+        + ', not the 8 this step chooses between'
+      : 'step 2 has no candidate list yet — put the 23 words there first';
+  p.appendChild(meta);
+  elPickOut.appendChild(p);
+}
+
+/* ---- the join: step 1's words become step 2's input ---- */
+$('to-phrase').addEventListener('click', () => {
+  const words = wordsFromRolls(parseRolls(elRolls.value).rolls).filter(w => w.idx !== null);
+  if (!words.length) {
+    elRollsStatus.textContent = 'Nothing to send yet — type some rolls.';
+    elRollsStatus.className = 'status warn';
+    return;
+  }
+  elPhrase.value = words.map(w => w.word).join(' ');
+  step2Changed();
+  elPhrase.focus();
+  elPhrase.scrollIntoView({ block: 'center' });
+});
+
+/* Anything that re-renders the candidate list also re-runs step 3: its note
+ * says how many candidates are on screen, and the ◆ mark has to move with
+ * them. (Typing in step 2 must not leave a stale "8 candidates" behind.) */
+function step2Changed() { render(); renderPick(); markPicked(); }
+
+elRolls.addEventListener('input', renderRolls);
+elBits.addEventListener('input', renderBits);
+elPick.addEventListener('input', () => { renderPick(); markPicked(); });
+elPhrase.addEventListener('input', step2Changed);
+elPrefix.addEventListener('input', step2Changed);
+
+$('copy-words').addEventListener('click', () => {
+  const { rolls } = parseRolls(elRolls.value);
+  const words = wordsFromRolls(rolls).filter(w => w.idx !== null);
+  if (!words.length) {
+    elRollsStatus.textContent = 'Nothing to copy yet.';
+    elRollsStatus.className = 'status warn';
+    return;
+  }
+  copy(words.map(w => w.word).join(' '), $('copy-words'));
+});
+
+$('dice-clear').addEventListener('click', () => {
+  elRolls.value = ''; elBits.value = ''; elPick.value = '';
+  elRollsOut.replaceChildren(); elBitsOut.replaceChildren();
+  renderPick();                 // the box is empty now, so its panel goes too
+  markPicked();                 // and the ◆ the cleared rolls placed comes off
+  elRollsStatus.textContent = ''; elRollsStatus.className = 'status';
+  elRolls.focus();
+});
+
+$('clear').addEventListener('click', () => {
+  elPhrase.value = ''; elPrefix.value = ''; elOut.replaceChildren(); setStatus('');
+  renderPick();   // the candidate list is gone, so step 3's note must say so
+  elPhrase.focus();
+});
+
+/* ---- one self-test for the whole file: the BIP39 core, then the dice ---- */
+function selfTest() { return selfTestWords().concat(selfTestDice()); }
+
+renderSelfTest();
+renderRolls();
+renderBits();
+renderPick();
+render();
+markPicked();
+
+/* ------------------------------------------------------------------ *
+ * Self-test — runs on load. Green here means the SHA-256, the bit
+ * packing, the checksum, and the embedded wordlist are all correct.
+ * ------------------------------------------------------------------ */
+function selfTestWords() {
+  const t = [];
+  const add = (name, got, want) => t.push({ name, got, want, pass: got === want });
+
+  add('SHA-256("")', hex(sha256(utf8(''))),
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  add('SHA-256("abc")', hex(sha256(utf8('abc'))),
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  add('SHA-256(56 bytes, 2 blocks)', hex(sha256(utf8('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq'))),
+      '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1');
+  add('wordlist SHA-256', hex(sha256(utf8(WORDLIST.join('\n')))), LIST_HASH);
+  add('wordlist length', String(WORDLIST.length), '2048');
+  add('wordlist sorted', String(WORDLIST.every((w, i) => i === 0 || WORDLIST[i - 1] < w)), 'true');
+  // The prefix filter's correctness rests on this: BIP39 guarantees the first
+  // four letters identify a word uniquely. Without it, a prefix could match
+  // several words and silently hide the one you are looking for.
+  add('wordlist 4-letter prefixes unique',
+      String(new Set(WORDLIST.map(w => w.slice(0, 4))).size === WORDLIST.length), 'true');
+  add('spot check: index 0 is "abandon"', WORDLIST[0], 'abandon');
+  add('spot check: index 2047 is "zoo"', WORDLIST[2047], 'zoo');
+
+  // 11 x "abandon" (= 128 zero entropy bits) must yield "about" among its candidates.
+  const a11 = compute(Array(11).fill('abandon'), '');
+  add('11×abandon → about', String(a11.candidates.length === 128 && a11.candidates.some(c => c.word === 'about')), 'true');
+
+  // 23 x "abandon" (256 zero bits) must yield "art".
+  const a23 = compute(Array(23).fill('abandon'), '');
+  add('23×abandon → art', String(a23.candidates.length === 8 && a23.candidates.some(c => c.word === 'art')), 'true');
+
+  // 23 x "zoo" (all-ones entropy) must yield "vote".
+  const z23 = compute(Array(23).fill('zoo'), '');
+  add('23×zoo → vote', String(z23.candidates.length === 8 && z23.candidates.some(c => c.word === 'vote')), 'true');
+
+  // A complete known-good mnemonic must verify, and a corrupted one must not.
+  const good = Array(11).fill('abandon').concat('about');
+  add('verify valid mnemonic', String(compute(good, '').valid), 'true');
+  add('verify corrupt mnemonic', String(compute(Array(11).fill('abandon').concat('abandon'), '').valid), 'false');
+
+  // The prefix filter must narrow without changing the underlying set.
+  const filtered = compute(Array(11).fill('abandon'), 'ab');
+  add('prefix filter narrows', String(filtered.total === 128 && filtered.candidates.length === 1 && filtered.candidates[0].word === 'about'), 'true');
+
+  return t;
+}
+
+/* ---- self-test: the dice arithmetic, and the README's worked examples ---- */
+function selfTestDice() {
+  const t = [];
+  const add = (name, got, want) => t.push({ name, got, want, pass: got === want });
+
+  add('roll → 2 bits (1–4)', ['1', '2', '3', '4'].map(r => PAIR[r]).join(' '), '00 01 10 11');
+  add('last roll → 1 bit (1–3 → 0, 4–6 → 1)', [1, 2, 3, 4, 5, 6].map(singleBit).join(''), '000111');
+
+  // README worked example: rolls 3 1 4 2 1 4 → bits 10001101001 = 1024+64+32+8+1 = 1129 → minor.
+  const w1 = wordsFromRolls(parseRolls('3 1 4 2 1 4').rolls)[0];
+  add('rolls 3 1 4 2 1 4 → minor (#1129)', w1.idx + ' ' + w1.word, '1129 minor');
+  const bits = '10001101001'.split('').reduce((a, b) => (a << 1) | (b === '1' ? 1 : 0), 0);
+  add('README example bits → minor', WORDLIST[bits] + ' #' + bits, 'minor #1129');
+
+  // A 5 or 6 can only be rerolled, never mapped — the row must say so rather than
+  // slide the word.
+  const bad = wordsFromRolls([5, 1, 4, 2, 1, 4])[0];
+  add('a 5 in a 2-bit slot is a reroll, not a word',
+      String(bad.idx === null && /reroll it/.test(bad.errs.join(' '))), 'true');
+  add('a 7 is rejected as out of range', String(parseRolls('7 1 4').badDigits.length), '1');
+
+  // 23 words is 138 rolls, five 2-bit rolls and a last roll each.
+  const w23 = wordsFromRolls(Array.from({ length: 138 }, (_, i) => (i % 6 === 5 ? 4 : 1 + (i % 4))));
+  add('138 rolls → 23 complete words', String(w23.length === 23 && w23.every(w => w.idx !== null)), 'true');
+
+  // The 24th word: README example 2 5 6, and the uniformity that makes it safe —
+  // 216 = 8 × 27 exactly, so all 216 rolls split evenly and no reroll is needed.
+  add('24th-word rolls 2 5 6 → candidate #2', String(pickIndex(2, 5, 6) + 1), '2');
+  const spread = new Array(8).fill(0);
+  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) for (let c = 1; c <= 6; c++) spread[pickIndex(a, b, c)]++;
+  add('all 216 rolls split evenly over the 8 candidates', spread.join(','), '27,27,27,27,27,27,27,27');
+
+  return t;
+}
+
+function renderSelfTest() {
+  const results = selfTest();
+  const passed = results.filter(r => r.pass).length;
+  const all = passed === results.length;
+  const summary = document.querySelector('#selftest summary');
+  summary.innerHTML = `Self-test — <span class="${all ? 'pass' : 'fail'}">${passed}/${results.length} passed</span>`;
+  if (!all) summary.parentElement.open = true;
+
+  const tbl = document.createElement('table');
+  const head = document.createElement('tr');
+  head.innerHTML = '<th>check</th><th>result</th>';
+  tbl.appendChild(head);
+  for (const r of results) {
+    const tr = document.createElement('tr');
+    const c1 = document.createElement('td');
+    c1.textContent = r.name;
+    const c2 = document.createElement('td');
+    c2.className = r.pass ? 'pass' : 'fail';
+    c2.textContent = r.pass ? 'pass' : `FAIL — got ${r.got}, want ${r.want}`;
+    tr.append(c1, c2);
+    tbl.appendChild(tr);
+  }
+  const body = document.getElementById('selftest-body');
+  body.replaceChildren(tbl);
+}
+</script>
+</body>
+</html>

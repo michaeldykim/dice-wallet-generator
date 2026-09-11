@@ -1,0 +1,30 @@
+name: verify
+
+# The page's whole claim is that `node verify.mjs` proves it correct. CI runs
+# exactly that command and nothing else — no install step, no dependencies,
+# no lockfile, so there is no gap between what CI checks and what you can run
+# on your own machine.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # A tool meant to run identically on any machine it is carried to
+        # should be shown to run on more than the author's Node.
+        node: ['22', '24', '26']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node verify.mjs
