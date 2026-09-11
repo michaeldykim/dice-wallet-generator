@@ -213,8 +213,10 @@ It extracts the page's `<script>`, runs it against a stub DOM, and calls the
 page's own `selfTest()`, `compute()`, `wordsFromRolls()` and `pickIndex()`. On
 top of that it builds phrases with `node:crypto` — which shares no code with the
 page — deletes the last word, and asserts recovery, 300 random seeds at both 12
-and 24 words, plus 300 runs of the whole dice procedure. If you edit the page,
-update the hash at the top of this README in the same commit.
+and 24 words, plus 300 runs of the whole dice procedure, and the two hashes this
+README publishes. If you edit the page, update the hash near the top of this
+README in the same commit — the gate reads this file and fails while the two
+disagree, so a stale hash lands in your terminal rather than in a stranger's.
 
 ## License
 

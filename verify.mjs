@@ -133,6 +133,47 @@ if (!fs.existsSync(REFERENCE)) {
          same ? '' : `the lists differ (${refWords.length} words vs ${WORDLIST.length})`);
 }
 
+/* ---------- the hashes the README publishes ----------
+ * The README tells a stranger to verify a download against a SHA-256, which
+ * makes that number a promise rather than a note — and it is typed by hand, so
+ * an edit to the page silently invalidates it. The failure lands on the person
+ * following the instructions, on a file that is actually fine. Read the README,
+ * take it at its word, and hold the files to it.
+ */
+const README = path.join(import.meta.dirname, 'README.md');
+console.log('\npublished hashes — README.md');
+if (!fs.existsSync(README)) {
+  console.log('  note  no README.md here — the published-hash check was skipped');
+} else {
+  const readme = fs.readFileSync(README, 'utf8');
+  const published = new Map();
+  for (const m of readme.matchAll(/shasum -a 256\s+(\S+)/g)) {
+    const rest = readme.slice(m.index + m[0].length);
+    const hex = rest.match(/\b[0-9a-f]{64}\b/);
+    // Take the digest only if no other command sits between it and the
+    // filename: the README repeats the page's shasum line for the airgapped
+    // round-trip, with no digest after it, and a real one further down.
+    if (hex && !rest.slice(0, hex.index).includes('shasum')) published.set(m[1], hex[0]);
+  }
+
+  // Hash bytes, exactly as `shasum -a 256` does. Hashing the decoded string
+  // would quietly disagree with it over a BOM or a malformed byte.
+  const digest = f => crypto.createHash('sha256')
+    .update(fs.readFileSync(path.join(import.meta.dirname, f))).digest('hex');
+
+  const matchesReadme = (file, label) => {
+    const claimed = published.get(file);
+    const got = digest(file);
+    report(`${label} matches the hash the README publishes`, got === claimed,
+           got === claimed ? got : `README says ${claimed || '(nothing)'}, the file is ${got}`);
+  };
+
+  matchesReadme(path.basename(PAGE), 'the page');
+  // Optional here for the same reason it is optional above: a human convenience,
+  // whose absence the reference-list section has already noted.
+  if (fs.existsSync(REFERENCE)) matchesReadme('bip39-english.txt', 'the reference list');
+}
+
 /* ---------- differential test against node:crypto ---------- */
 const readBits = bytes => {
   const b = [];
