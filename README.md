@@ -6,6 +6,16 @@ One file, `dice-wallet-generator.html`, that does both halves of building a
 BIP39 wallet from dice, offline. Open it in any browser — there is no build
 step, no dependencies, and no network. `node verify.mjs` runs the test suite.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="The Dice Wallet Generator page. Step 1 has eighteen dice rolls typed in, producing the words minor, brand and weird. Step 2 has 23 words typed in and reports 8 candidates from 3 unknown entropy bits. Step 3 has the rolls 2 5 6, which resolve to candidate #2, and that row is marked with a diamond in the candidate list below, where all 8 checksum-valid 24-word phrases are shown."
+       src="docs/screenshot-light.png">
+</picture>
+
+The screenshot is the README's own worked examples — `3 1 4 2 1 4` giving
+`minor`, and `2 5 6` choosing candidate #2 — with the standard BIP39 test-vector
+words in step 2, so nothing in it is anybody's seed.
+
 ## Before you use this
 
 Plainly, so that none of it has to be inferred:
